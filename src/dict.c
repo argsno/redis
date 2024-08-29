@@ -108,6 +108,7 @@ static void _dictReset(dictht *ht)
 }
 
 /* Create a new hash table */
+// 创建一个新的哈希表
 dict *dictCreate(dictType *type,
         void *privDataPtr)
 {
@@ -125,7 +126,7 @@ int _dictInit(dict *d, dictType *type,
     _dictReset(&d->ht[1]);
     d->type = type;
     d->privdata = privDataPtr;
-    d->rehashidx = -1;
+    d->rehashidx = -1; // rehashidx为-1表示没有进行rehash操作
     d->iterators = 0;
     return DICT_OK;
 }
@@ -262,12 +263,13 @@ static void _dictRehashStep(dict *d) {
 }
 
 /* Add an element to the target hash table */
+// 添加一个元素到哈希表d中
 int dictAdd(dict *d, void *key, void *val)
 {
-    dictEntry *entry = dictAddRaw(d,key,NULL);
+    dictEntry *entry = dictAddRaw(d,key,NULL); // 先尝试添加元素
 
     if (!entry) return DICT_ERR;
-    dictSetVal(d, entry, val);
+    dictSetVal(d, entry, val); // 设置entry指向的value
     return DICT_OK;
 }
 
@@ -295,10 +297,11 @@ dictEntry *dictAddRaw(dict *d, void *key, dictEntry **existing)
     dictEntry *entry;
     dictht *ht;
 
-    if (dictIsRehashing(d)) _dictRehashStep(d);
+    if (dictIsRehashing(d)) _dictRehashStep(d); // 如果正在rehash，则执行一次rehash操作
 
     /* Get the index of the new element, or -1 if
      * the element already exists. */
+    // 如果key已经存在，则返回-1
     if ((index = _dictKeyIndex(d, key, dictHashKey(d,key), existing)) == -1)
         return NULL;
 
@@ -306,15 +309,15 @@ dictEntry *dictAddRaw(dict *d, void *key, dictEntry **existing)
      * Insert the element in top, with the assumption that in a database
      * system it is more likely that recently added entries are accessed
      * more frequently. */
-    ht = dictIsRehashing(d) ? &d->ht[1] : &d->ht[0];
+    ht = dictIsRehashing(d) ? &d->ht[1] : &d->ht[0]; // 如果正在rehash，则使用ht[1]，否则使用ht[0]
     entry = zmalloc(sizeof(*entry));
     entry->next = ht->table[index];
-    ht->table[index] = entry;
+    ht->table[index] = entry; // 将entry插入到index位置
     ht->used++;
 
     /* Set the hash entry fields. */
-    dictSetKey(d, entry, key);
-    return entry;
+    dictSetKey(d, entry, key); // 设置key，必要时进行复制
+    return entry; // 返回添加的dictEntry
 }
 
 /* Add or Overwrite:
@@ -967,22 +970,22 @@ static long _dictKeyIndex(dict *d, const void *key, uint64_t hash, dictEntry **e
     if (existing) *existing = NULL;
 
     /* Expand the hash table if needed */
-    if (_dictExpandIfNeeded(d) == DICT_ERR)
+    if (_dictExpandIfNeeded(d) == DICT_ERR) // 在需要时对哈希表进行扩容
         return -1;
-    for (table = 0; table <= 1; table++) {
+    for (table = 0; table <= 1; table++) { // 遍历ht[0]和ht[1]
         idx = hash & d->ht[table].sizemask;
         /* Search if this slot does not already contain the given key */
-        he = d->ht[table].table[idx];
-        while(he) {
-            if (key==he->key || dictCompareKeys(d, key, he->key)) {
+        he = d->ht[table].table[idx]; // 获取哈希表的索引
+        while(he) { // 遍历链表
+            if (key==he->key || dictCompareKeys(d, key, he->key)) { // 如果key已经存在
                 if (existing) *existing = he;
                 return -1;
             }
-            he = he->next;
+            he = he->next; // 遍历下一个节点
         }
         if (!dictIsRehashing(d)) break;
     }
-    return idx;
+    return idx; // 返回索引
 }
 
 void dictEmpty(dict *d, void(callback)(void*)) {

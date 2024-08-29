@@ -460,29 +460,30 @@ static inline size_t raxLowWalk(rax *rax, unsigned char *s, size_t len, raxNode 
 
     size_t i = 0; /* Position in the string. */
     size_t j = 0; /* Position in the node children (or bytes if compressed).*/
-    while(h->size && i < len) {
+    while(h->size && i < len) { // 当前节点有子节点，且字符串未匹配完
         debugnode("Lookup current node",h);
         unsigned char *v = h->data;
 
-        if (h->iscompr) {
+        if (h->iscompr) { // 压缩节点
             for (j = 0; j < h->size && i < len; j++, i++) {
                 if (v[j] != s[i]) break;
             }
-            if (j != h->size) break;
+            if (j != h->size) break; // 压缩节点未匹配完，直接结束
         } else {
             /* Even when h->size is large, linear scan provides good
              * performances compared to other approaches that are in theory
              * more sounding, like performing a binary search. */
             for (j = 0; j < h->size; j++) {
-                if (v[j] == s[i]) break;
+                if (v[j] == s[i]) break; // 匹配第一个匹配的字符
             }
-            if (j == h->size) break;
+            if (j == h->size) break; // 未匹配到字符，直接结束
             i++;
         }
 
         if (ts) raxStackPush(ts,h); /* Save stack of parent nodes. */
         raxNode **children = raxNodeFirstChildPtr(h);
         if (h->iscompr) j = 0; /* Compressed node only child is at index 0. */
+        // 保存当前节点的父节点指针
         memcpy(&h,children+j,sizeof(h));
         parentlink = children+j;
         j = 0; /* If the new node is compressed and we do not

@@ -53,7 +53,7 @@ void updateLFU(robj *val) {
  * implementations that should instead rely on lookupKeyRead(),
  * lookupKeyWrite() and lookupKeyReadWithFlags(). */
 robj *lookupKey(redisDb *db, robj *key, int flags) {
-    dictEntry *de = dictFind(db->dict,key->ptr);
+    dictEntry *de = dictFind(db->dict,key->ptr); // 在db->dict中查找key->ptr
     if (de) {
         robj *val = dictGetVal(de);
 
@@ -171,8 +171,8 @@ robj *lookupKeyWriteOrReply(client *c, robj *key, robj *reply) {
  *
  * The program is aborted if the key already exists. */
 void dbAdd(redisDb *db, robj *key, robj *val) {
-    sds copy = sdsdup(key->ptr);
-    int retval = dictAdd(db->dict, copy, val);
+    sds copy = sdsdup(key->ptr);  // 复制key
+    int retval = dictAdd(db->dict, copy, val); // 添加到字典
 
     serverAssertWithInfo(NULL,key,retval == DICT_OK);
     if (val->type == OBJ_LIST ||
@@ -213,9 +213,10 @@ void dbOverwrite(redisDb *db, robj *key, robj *val) {
  * 3) The expire time of the key is reset (the key is made persistent).
  *
  * All the new keys in the database should be created via this interface. */
+// 设置key-value
 void setKey(redisDb *db, robj *key, robj *val) {
-    if (lookupKeyWrite(db,key) == NULL) {
-        dbAdd(db,key,val);
+    if (lookupKeyWrite(db,key) == NULL) { // 如果key不存在
+        dbAdd(db,key,val); // 添加key-value
     } else {
         dbOverwrite(db,key,val);
     }

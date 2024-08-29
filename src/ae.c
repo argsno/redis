@@ -133,22 +133,23 @@ void aeStop(aeEventLoop *eventLoop) {
     eventLoop->stop = 1;
 }
 
+// 为给定 fd 的事件 mask 注册事件处理器 proc
 int aeCreateFileEvent(aeEventLoop *eventLoop, int fd, int mask,
         aeFileProc *proc, void *clientData)
 {
-    if (fd >= eventLoop->setsize) {
+    if (fd >= eventLoop->setsize) { // fd 超过了 eventLoop->setsize
         errno = ERANGE;
         return AE_ERR;
     }
-    aeFileEvent *fe = &eventLoop->events[fd];
+    aeFileEvent *fe = &eventLoop->events[fd]; // 获取 fd 对应的 aeFileEvent
 
-    if (aeApiAddEvent(eventLoop, fd, mask) == -1)
+    if (aeApiAddEvent(eventLoop, fd, mask) == -1) // 调用 aeApiAddEvent 注册事件
         return AE_ERR;
     fe->mask |= mask;
-    if (mask & AE_READABLE) fe->rfileProc = proc;
-    if (mask & AE_WRITABLE) fe->wfileProc = proc;
+    if (mask & AE_READABLE) fe->rfileProc = proc; // 设置读事件处理器
+    if (mask & AE_WRITABLE) fe->wfileProc = proc; // 设置写事件处理器
     fe->clientData = clientData;
-    if (fd > eventLoop->maxfd)
+    if (fd > eventLoop->maxfd) // 更新 eventLoop->maxfd
         eventLoop->maxfd = fd;
     return AE_OK;
 }
@@ -415,7 +416,7 @@ int aeProcessEvents(aeEventLoop *eventLoop, int flags)
             eventLoop->aftersleep(eventLoop);
 
         for (j = 0; j < numevents; j++) {
-            aeFileEvent *fe = &eventLoop->events[eventLoop->fired[j].fd];
+            aeFileEvent *fe = &eventLoop->events[eventLoop->fired[j].fd]; // 获取fd对应的事件处理器
             int mask = eventLoop->fired[j].mask;
             int fd = eventLoop->fired[j].fd;
             int fired = 0; /* Number of events fired for current fd. */

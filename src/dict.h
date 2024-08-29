@@ -44,40 +44,52 @@
 /* Unused arguments generate annoying warnings... */
 #define DICT_NOTUSED(V) ((void) V)
 
+// Hash表节点
 typedef struct dictEntry {
-    void *key;
-    union {
-        void *val;
+    void *key; // 键
+    union { // 值
+        void *val; // db.dict中的val, ...
         uint64_t u64;
-        int64_t s64;
-        double d;
+        int64_t s64; // db.expires中存储过期时间
+        double d; // zunion中用于存储score
     } v;
-    struct dictEntry *next;
+    struct dictEntry *next; // 指向下一个节点，用于解决哈希冲突
 } dictEntry;
 
 typedef struct dictType {
-    uint64_t (*hashFunction)(const void *key);
-    void *(*keyDup)(void *privdata, const void *key);
-    void *(*valDup)(void *privdata, const void *obj);
-    int (*keyCompare)(void *privdata, const void *key1, const void *key2);
-    void (*keyDestructor)(void *privdata, void *key);
-    void (*valDestructor)(void *privdata, void *obj);
+    uint64_t (*hashFunction)(const void *key); // 该字典对应的Hash函数
+    void *(*keyDup)(void *privdata, const void *key); // 键对应的复制函数
+    void *(*valDup)(void *privdata, const void *obj); // 值对应的复制函数
+    int (*keyCompare)(void *privdata, const void *key1, const void *key2); // 键的比较函数
+    void (*keyDestructor)(void *privdata, void *key); // 键的销毁函数
+    void (*valDestructor)(void *privdata, void *obj); // 值的销毁函数
 } dictType;
 
 /* This is our hash table structure. Every dictionary has two of this as we
  * implement incremental rehashing, for the old to the new table. */
-typedef struct dictht {
-    dictEntry **table;
-    unsigned long size;
-    unsigned long sizemask;
-    unsigned long used;
+typedef struct dictht { // 字典的哈希表，总体占用32字节
+    dictEntry **table; // dictEntry的指针数组
+    unsigned long size; // table数组的大小
+    unsigned long sizemask; // 掩码 = size - 1
+    unsigned long used; // 已经使用的节点数量
 } dictht;
 
-typedef struct dict {
-    dictType *type;
-    void *privdata;
-    dictht ht[2];
+/**
+ * 在Redis中应用广泛，比如
+ * 1. 主数据库的KV数据
+ * 2. 键值对的过期时间
+ * 3. zset中存储member对应的score
+ * 4. 哨兵模式中用于管理所有的Master节点及Slave节点
+ * 5. Hash类型的值
+ */
+ // 总用8+8+32*2+8+8=96字节
+typedef struct dict { // 字典结构，总体占用40字节
+    dictType *type; // 该字典对应的特定操作函数，比如dbDictType等
+    void *privdata; // 传给dictType对应的入参
+    dictht ht[2]; // 两个dictht，用于rehash
+    // rehashidx = -1表示没有rehash在进行
     long rehashidx; /* rehashing not in progress if rehashidx == -1 */
+    // 记录当前正在运行的迭代器数量，当迭代器数量为0时，才能进行rehash
     unsigned long iterators; /* number of iterators currently running */
 } dict;
 
@@ -137,7 +149,7 @@ typedef void (dictScanBucketFunction)(void *privdata, dictEntry **bucketref);
         (d)->type->keyCompare((d)->privdata, key1, key2) : \
         (key1) == (key2))
 
-#define dictHashKey(d, key) (d)->type->hashFunction(key)
+#define dictHashKey(d, key) (d)->type->hashFunction(key) // 计算key的hash值
 #define dictGetKey(he) ((he)->key)
 #define dictGetVal(he) ((he)->v.val)
 #define dictGetSignedIntegerVal(he) ((he)->v.s64)

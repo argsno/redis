@@ -247,13 +247,13 @@ robj *createHashObject(void) {
 }
 
 robj *createZsetObject(void) {
-    zset *zs = zmalloc(sizeof(*zs));
+    zset *zs = zmalloc(sizeof(*zs)); // 创建一个有序集合
     robj *o;
 
-    zs->dict = dictCreate(&zsetDictType,NULL);
-    zs->zsl = zslCreate();
-    o = createObject(OBJ_ZSET,zs);
-    o->encoding = OBJ_ENCODING_SKIPLIST;
+    zs->dict = dictCreate(&zsetDictType,NULL); // 创建一个字典
+    zs->zsl = zslCreate(); // 创建一个跳跃表
+    o = createObject(OBJ_ZSET,zs); // 创建一个有序集合对象
+    o->encoding = OBJ_ENCODING_SKIPLIST; // 设置有序集合对象的编码方式为跳跃表
     return o;
 }
 

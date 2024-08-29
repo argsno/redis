@@ -69,6 +69,8 @@ int zslLexValueLteMax(sds value, zlexrangespec *spec);
 /* Create a skiplist node with the specified number of levels.
  * The SDS string 'ele' is referenced by the node after the call. */
 zskiplistNode *zslCreateNode(int level, double score, sds ele) {
+    // 为 zskiplistNode 分配内存
+    // 柔性数组，zskiplistNode 结构体的最后一个字段是一个长度为 level 的 zskiplistLevel 数组
     zskiplistNode *zn =
         zmalloc(sizeof(*zn)+level*sizeof(struct zskiplistLevel));
     zn->score = score;
@@ -82,9 +84,9 @@ zskiplist *zslCreate(void) {
     zskiplist *zsl;
 
     zsl = zmalloc(sizeof(*zsl));
-    zsl->level = 1;
+    zsl->level = 1; // zsl->level is 1-based
     zsl->length = 0;
-    zsl->header = zslCreateNode(ZSKIPLIST_MAXLEVEL,0,NULL);
+    zsl->header = zslCreateNode(ZSKIPLIST_MAXLEVEL,0,NULL); // dummy header
     for (j = 0; j < ZSKIPLIST_MAXLEVEL; j++) {
         zsl->header->level[j].forward = NULL;
         zsl->header->level[j].span = 0;
@@ -130,8 +132,8 @@ int zslRandomLevel(void) {
  * exist (up to the caller to enforce that). The skiplist takes ownership
  * of the passed SDS string 'ele'. */
 zskiplistNode *zslInsert(zskiplist *zsl, double score, sds ele) {
-    zskiplistNode *update[ZSKIPLIST_MAXLEVEL], *x;
-    unsigned int rank[ZSKIPLIST_MAXLEVEL];
+    zskiplistNode *update[ZSKIPLIST_MAXLEVEL], *x; // update 数组用于记录每层的插入位置
+    unsigned int rank[ZSKIPLIST_MAXLEVEL]; // rank 数组用于记录每层的 rank 值
     int i, level;
 
     serverAssert(!isnan(score));
@@ -154,7 +156,7 @@ zskiplistNode *zslInsert(zskiplist *zsl, double score, sds ele) {
      * caller of zslInsert() should test in the hash table if the element is
      * already inside or not. */
     level = zslRandomLevel();
-    if (level > zsl->level) {
+    if (level > zsl->level) { // 如果新节点的 level 大于 zsl 的 level，需要更新 zsl 的 level
         for (i = zsl->level; i < level; i++) {
             rank[i] = 0;
             update[i] = zsl->header;
@@ -162,26 +164,26 @@ zskiplistNode *zslInsert(zskiplist *zsl, double score, sds ele) {
         }
         zsl->level = level;
     }
-    x = zslCreateNode(level,score,ele);
+    x = zslCreateNode(level,score,ele); // 创建新节点
     for (i = 0; i < level; i++) {
-        x->level[i].forward = update[i]->level[i].forward;
-        update[i]->level[i].forward = x;
+        x->level[i].forward = update[i]->level[i].forward; // 更新新节点的 forward 指针
+        update[i]->level[i].forward = x; // 更新前一个节点的 forward 指针
 
         /* update span covered by update[i] as x is inserted here */
-        x->level[i].span = update[i]->level[i].span - (rank[0] - rank[i]);
-        update[i]->level[i].span = (rank[0] - rank[i]) + 1;
+        x->level[i].span = update[i]->level[i].span - (rank[0] - rank[i]); // 更新新节点的 span
+        update[i]->level[i].span = (rank[0] - rank[i]) + 1; // 更新前一个节点的 span
     }
 
     /* increment span for untouched levels */
-    for (i = level; i < zsl->level; i++) {
+    for (i = level; i < zsl->level; i++) { // 对于新节点的 level 之后的 level，span 都要加 1
         update[i]->level[i].span++;
     }
 
-    x->backward = (update[0] == zsl->header) ? NULL : update[0];
+    x->backward = (update[0] == zsl->header) ? NULL : update[0]; // 更新新节点的 backward 指针
     if (x->level[0].forward)
-        x->level[0].forward->backward = x;
+        x->level[0].forward->backward = x; // 更新新节点的 forward 节点的 backward 指针
     else
-        zsl->tail = x;
+        zsl->tail = x; // 如果新节点是最后一个节点，更新 zsl 的 tail 指针
     zsl->length++;
     return x;
 }
@@ -190,18 +192,19 @@ zskiplistNode *zslInsert(zskiplist *zsl, double score, sds ele) {
 void zslDeleteNode(zskiplist *zsl, zskiplistNode *x, zskiplistNode **update) {
     int i;
     for (i = 0; i < zsl->level; i++) {
-        if (update[i]->level[i].forward == x) {
-            update[i]->level[i].span += x->level[i].span - 1;
-            update[i]->level[i].forward = x->level[i].forward;
+        if (update[i]->level[i].forward == x) { // 找到要删除节点的前一个节点
+            update[i]->level[i].span += x->level[i].span - 1; // 更新前一个节点的 span
+            update[i]->level[i].forward = x->level[i].forward; // 更新前一个节点的 forward 指针
         } else {
-            update[i]->level[i].span -= 1;
+            update[i]->level[i].span -= 1; // 更新前一个节点的 span
         }
     }
     if (x->level[0].forward) {
-        x->level[0].forward->backward = x->backward;
+        x->level[0].forward->backward = x->backward; // 更新要删除节点的 forward 节点的 backward 指针
     } else {
-        zsl->tail = x->backward;
+        zsl->tail = x->backward; // 如果要删除节点是最后一个节点，更新 zsl 的 tail 指针
     }
+    // 删除节点后，如果 zsl 的 level 大于 1，且 header 的 forward 指针为空，需要更新 zsl 的 level
     while(zsl->level > 1 && zsl->header->level[zsl->level-1].forward == NULL)
         zsl->level--;
     zsl->length--;
@@ -228,13 +231,13 @@ int zslDelete(zskiplist *zsl, double score, sds ele, zskiplistNode **node) {
         {
             x = x->level[i].forward;
         }
-        update[i] = x;
+        update[i] = x; // update 数组记录每层的插入位置
     }
     /* We may have multiple elements with the same score, what we need
      * is to find the element with both the right score and object. */
-    x = x->level[0].forward;
+    x = x->level[0].forward; // x 是要删除的节点
     if (x && score == x->score && sdscmp(x->ele,ele) == 0) {
-        zslDeleteNode(zsl, x, update);
+        zslDeleteNode(zsl, x, update); // 删除节点
         if (!node)
             zslFreeNode(x);
         else
@@ -1383,14 +1386,14 @@ int zsetAdd(robj *zobj, double score, sds ele, int *flags, double *newscore) {
         zskiplistNode *znode;
         dictEntry *de;
 
-        de = dictFind(zs->dict,ele);
+        de = dictFind(zs->dict,ele); // 从哈希表中查找元素
         if (de != NULL) {
             /* NX? Return, same element already exists. */
             if (nx) {
                 *flags |= ZADD_NOP;
                 return 1;
             }
-            curscore = *(double*)dictGetVal(de);
+            curscore = *(double*)dictGetVal(de); // 获取当前元素的分数
 
             /* Prepare the score for the increment if needed. */
             if (incr) {
@@ -1404,8 +1407,8 @@ int zsetAdd(robj *zobj, double score, sds ele, int *flags, double *newscore) {
 
             /* Remove and re-insert when score changes. */
             if (score != curscore) {
-                znode = zslUpdateScore(zs->zsl,curscore,ele,score);
-                /* Note that we did not removed the original element from
+                znode = zslUpdateScore(zs->zsl,curscore,ele,score); // 更新跳跃表中的分数
+                /* Note that we did not remove the original element from
                  * the hash table representing the sorted set, so we just
                  * update the score. */
                 dictGetVal(de) = &znode->score; /* Update score ptr. */
@@ -1413,9 +1416,9 @@ int zsetAdd(robj *zobj, double score, sds ele, int *flags, double *newscore) {
             }
             return 1;
         } else if (!xx) {
-            ele = sdsdup(ele);
-            znode = zslInsert(zs->zsl,score,ele);
-            serverAssert(dictAdd(zs->dict,ele,&znode->score) == DICT_OK);
+            ele = sdsdup(ele); // 复制元素
+            znode = zslInsert(zs->zsl,score,ele); // 插入元素到跳跃表
+            serverAssert(dictAdd(zs->dict,ele,&znode->score) == DICT_OK); // 插入元素到哈希表
             *flags |= ZADD_ADDED;
             if (newscore) *newscore = score;
             return 1;
@@ -1444,7 +1447,7 @@ int zsetDel(robj *zobj, sds ele) {
         dictEntry *de;
         double score;
 
-        de = dictUnlink(zs->dict,ele);
+        de = dictUnlink(zs->dict,ele); // 从哈希表中删除元素
         if (de != NULL) {
             /* Get the score in order to delete from the skiplist later. */
             score = *(double*)dictGetVal(de);
@@ -1457,10 +1460,10 @@ int zsetDel(robj *zobj, sds ele) {
             dictFreeUnlinkedEntry(zs->dict,de);
 
             /* Delete from skiplist. */
-            int retval = zslDelete(zs->zsl,score,ele,NULL);
+            int retval = zslDelete(zs->zsl,score,ele,NULL); // 从跳跃表中删除元素
             serverAssert(retval);
 
-            if (htNeedsResize(zs->dict)) dictResize(zs->dict);
+            if (htNeedsResize(zs->dict)) dictResize(zs->dict); // 如果哈希表需要缩小，则进行缩小
             return 1;
         }
     } else {
@@ -1558,13 +1561,14 @@ void zaddGenericCommand(client *c, int flags) {
 
     /* Parse options. At the end 'scoreidx' is set to the argument position
      * of the score of the first score-element pair. */
+    // 解析参数
     scoreidx = 2;
     while(scoreidx < c->argc) {
         char *opt = c->argv[scoreidx]->ptr;
-        if (!strcasecmp(opt,"nx")) flags |= ZADD_NX;
-        else if (!strcasecmp(opt,"xx")) flags |= ZADD_XX;
-        else if (!strcasecmp(opt,"ch")) flags |= ZADD_CH;
-        else if (!strcasecmp(opt,"incr")) flags |= ZADD_INCR;
+        if (!strcasecmp(opt,"nx")) flags |= ZADD_NX; // 如果已经存在，则不添加
+        else if (!strcasecmp(opt,"xx")) flags |= ZADD_XX; // 如果不存在，则不添加
+        else if (!strcasecmp(opt,"ch")) flags |= ZADD_CH; // 返回添加或更新的元素数量
+        else if (!strcasecmp(opt,"incr")) flags |= ZADD_INCR; // 对已存在的元素进行增量操作
         else break;
         scoreidx++;
     }
@@ -1608,7 +1612,7 @@ void zaddGenericCommand(client *c, int flags) {
 
     /* Lookup the key and create the sorted set if does not exist. */
     zobj = lookupKeyWrite(c->db,key);
-    if (zobj == NULL) {
+    if (zobj == NULL) { // 如果不存在，则创建一个新的有序集合对象
         if (xx) goto reply_to_client; /* No key + XX option: nothing to do. */
         if (server.zset_max_ziplist_entries == 0 ||
             server.zset_max_ziplist_value < sdslen(c->argv[scoreidx+1]->ptr))
@@ -1617,7 +1621,7 @@ void zaddGenericCommand(client *c, int flags) {
         } else {
             zobj = createZsetZiplistObject();
         }
-        dbAdd(c->db,key,zobj);
+        dbAdd(c->db,key,zobj); // 将新的有序集合对象添加到数据库中
     } else {
         if (zobj->type != OBJ_ZSET) {
             addReply(c,shared.wrongtypeerr);
@@ -1675,13 +1679,14 @@ void zremCommand(client *c) {
     robj *zobj;
     int deleted = 0, keyremoved = 0, j;
 
+    // 查找有序集合对象是否存在
     if ((zobj = lookupKeyWriteOrReply(c,key,shared.czero)) == NULL ||
         checkType(c,zobj,OBJ_ZSET)) return;
 
     for (j = 2; j < c->argc; j++) {
         if (zsetDel(zobj,c->argv[j]->ptr)) deleted++;
         if (zsetLength(zobj) == 0) {
-            dbDelete(c->db,key);
+            dbDelete(c->db,key); // 如果有序集合为空，则删除这个键
             keyremoved = 1;
             break;
         }

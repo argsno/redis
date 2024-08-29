@@ -1933,6 +1933,13 @@ void checkTcpBacklogSettings(void) {
  * impossible to bind, or no bind addresses were specified in the server
  * configuration but the function is not able to bind * for at least
  * one of the IPv4 or IPv6 protocols. */
+/**
+ * port: 用户配置的端口号
+ * server.bindaddr: 用户配置的所有IP地址
+ * server.bindaddr_count: 用户配置的IP地址个数
+ * fds: 保存绑定成功的socket文件描述符
+ * count: 绑定成功的socket文件描述符个数
+ */
 int listenToPort(int port, int *fds, int *count) {
     int j;
 
@@ -1947,19 +1954,19 @@ int listenToPort(int port, int *fds, int *count) {
             fds[*count] = anetTcp6Server(server.neterr,port,NULL,
                 server.tcp_backlog);
             if (fds[*count] != ANET_ERR) {
-                anetNonBlock(NULL,fds[*count]);
+                anetNonBlock(NULL,fds[*count]); // 设置非阻塞
                 (*count)++;
             } else if (errno == EAFNOSUPPORT) {
                 unsupported++;
                 serverLog(LL_WARNING,"Not listening to IPv6: unsupproted");
             }
 
-            if (*count == 1 || unsupported) {
+            if (*count == 1 || unsupported) { // IPV6绑定成功或者不支持，再绑定IPV4
                 /* Bind the IPv4 address as well. */
                 fds[*count] = anetTcpServer(server.neterr,port,NULL,
-                    server.tcp_backlog);
+                    server.tcp_backlog); // 绑定IPV4地址
                 if (fds[*count] != ANET_ERR) {
-                    anetNonBlock(NULL,fds[*count]);
+                    anetNonBlock(NULL,fds[*count]); // 设置非阻塞
                     (*count)++;
                 } else if (errno == EAFNOSUPPORT) {
                     unsupported++;
@@ -1970,11 +1977,11 @@ int listenToPort(int port, int *fds, int *count) {
              * otherwise fds[*count] will be ANET_ERR and we'll print an
              * error and return to the caller with an error. */
             if (*count + unsupported == 2) break;
-        } else if (strchr(server.bindaddr[j],':')) {
+        } else if (strchr(server.bindaddr[j],':')) { // IPV6
             /* Bind IPv6 address. */
             fds[*count] = anetTcp6Server(server.neterr,port,server.bindaddr[j],
                 server.tcp_backlog);
-        } else {
+        } else { // IPV4
             /* Bind IPv4 address. */
             fds[*count] = anetTcpServer(server.neterr,port,server.bindaddr[j],
                 server.tcp_backlog);
@@ -2154,6 +2161,8 @@ void initServer(void) {
 
     /* Create an event handler for accepting new connections in TCP and Unix
      * domain sockets. */
+    // 为每个监听文件描述符注册可读事件，用于接收新连接
+    // acceptTcpHandler: 处理socket连接的accept以及客户端对象的创建
     for (j = 0; j < server.ipfd_count; j++) {
         if (aeCreateFileEvent(server.el, server.ipfd[j], AE_READABLE,
             acceptTcpHandler,NULL) == AE_ERR)
